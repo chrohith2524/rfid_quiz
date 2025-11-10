@@ -9,7 +9,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 DB_FILE = "games.json"
 def load_db():
     if os.path.exists(DB_FILE):
-        with open(DB_FILE) as f: 
+        with open(DB_FILE) as f:
             return json.load(f)
     return {"games": []}
 
@@ -50,7 +50,7 @@ state = {
     "finished": False
 }
 
-# ------------------- Helper Functions -------------------
+# ------------------- Helpers -------------------
 def items_for(cat):
     if cat == "Letters": return list(letter_to_word.keys())
     if cat == "Numbers": return [str(i) for i in range(11)]
@@ -91,7 +91,7 @@ def next_item():
         })
         data["games"] = data["games"][-5:]
         save_db(data)
-        emit_update(f"✅ Quiz Finished in {duration}s!", "done")
+        emit_update(f"🎉 Congratulations! Quiz completed in {duration}s!", "done")
 
 def start_game(cat, mode):
     q = items_for(cat)
@@ -103,7 +103,7 @@ def start_game(cat, mode):
 
 # ------------------- Routes -------------------
 @app.route("/")
-def home(): 
+def home():
     return render_template_string(HTML_PAGE)
 
 @app.route("/start", methods=["POST"])
@@ -140,7 +140,7 @@ def scan():
     return jsonify(ok=True)
 
 @app.route("/api/games")
-def games(): 
+def games():
     return jsonify(load_db()["games"])
 
 @app.route("/static/<path:filename>")
@@ -151,7 +151,7 @@ def static_files(filename):
 def connect():
     emit_update("Connected", "neutral")
 
-# ------------------- HTML Frontend -------------------
+# ------------------- HTML -------------------
 HTML_PAGE = """<!doctype html><html><head>
 <meta charset="utf-8"><title>RFID Quiz</title>
 <style>
@@ -162,12 +162,15 @@ select,button{padding:8px 12px;font-size:16px;margin:5px}
 width:320px;box-shadow:0 6px 20px rgba(0,0,0,0.08)}
 .big{font-size:72px}
 #pic{width:220px;height:220px;object-fit:contain;border-radius:12px;background:#f6f8fb;margin-top:10px}
-.ok-flash{animation:ok 0.4s ease}
-.wrong-flash{animation:wrong 0.4s ease}
+.ok-flash{animation:ok 0.3s ease}
+.wrong-flash{animation:wrong 0.3s ease}
 @keyframes ok{0%{background:#e8ffe8}100%{background:#fff}}
 @keyframes wrong{0%{background:#ffe8e8}100%{background:#fff}}
 .ok{color:green}.wrong{color:red}.neutral{color:#555}.done{color:#0b6e99;font-weight:600}
 audio{display:none}
+table{margin:auto;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden}
+th,td{padding:6px 10px;border-bottom:1px solid #ddd}
+th{background:#222;color:white}
 </style></head><body>
 <h1>RFID Quiz</h1>
 <div>
@@ -178,9 +181,8 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 <h2 id=status class=neutral>Waiting...</h2>
 <div class=stage><div id=item class=big></div><img id=pic src=""></div>
 <h3 id=score>Score: 0/0</h3>
-<h2>🕹️ Last 5 Games</h2>
-<table style="margin:auto;border-collapse:collapse">
-<thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th></tr></thead>
+<h2>🕹️ Last 5 Games Report</h2>
+<table><thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th></tr></thead>
 <tbody id=history></tbody></table>
 
 <audio id=ding src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_c3f9b1e982.mp3?filename=correct-answer-6033.mp3"></audio>
@@ -191,8 +193,7 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 const s=io(),st=document.getElementById('status'),it=document.getElementById('item'),
 sc=document.getElementById('score'),btn=document.getElementById('start'),
 cat=document.getElementById('c'),mod=document.getElementById('m'),pic=document.getElementById('pic'),
-history=document.getElementById('history'),ding=document.getElementById('ding'),
-buzz=document.getElementById('buzz');
+history=document.getElementById('history'),ding=document.getElementById('ding'),buzz=document.getElementById('buzz');
 
 async function loadHistory(){
  const r=await fetch('/api/games');const data=await r.json();
@@ -211,7 +212,8 @@ s.on('update',d=>{
  if(d.item){if(d.cat==='Letters'){const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};speak(d.item+' for '+(w[d.item]||''));}else{speak(d.item);}}
  if(d.stat==='ok'){ding.play();speak('Correct!');}
  if(d.stat==='wrong'){buzz.play();speak('Wrong! Try again');}
- if(d.stat==='done'){speak('Quiz Finished!');loadHistory();}
+ if(d.stat==='done'){speak('Congratulations! The quiz is completed.');loadHistory();
+  setTimeout(()=>{location.reload();},5000);}
 });
 loadHistory();
 </script></body></html>"""
