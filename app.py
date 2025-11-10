@@ -134,21 +134,48 @@ const s=io(),st=document.getElementById('status'),it=document.getElementById('it
 sc=document.getElementById('score'),btn=document.getElementById('start'),
 cat=document.getElementById('c'),mod=document.getElementById('m'),pic=document.getElementById('pic'),
 history=document.getElementById('history'),ding=document.getElementById('ding'),buzz=document.getElementById('buzz');
-async function loadHistory(){const r=await fetch('/api/games');const d=await r.json();
-history.innerHTML=d.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td></tr>`).join('');}
-function speak(t){if('speechSynthesis'in window){let u=new SpeechSynthesisUtterance(t);u.lang='en-IN';u.pitch=1.1;u.rate=1;speechSynthesis.cancel();speechSynthesis.speak(u);}}
-btn.onclick=async()=>{await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat.value,mode:mod.value})});};
+
+async function loadHistory(){
+  const r=await fetch('/api/games');const d=await r.json();
+  history.innerHTML=d.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td></tr>`).join('');
+}
+
+function speak(t){
+  if('speechSynthesis' in window){
+    let u=new SpeechSynthesisUtterance(t);
+    u.lang='en-IN';u.pitch=1;u.rate=1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+}
+
+btn.onclick=async()=>{
+  await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat.value,mode:mod.value})});
+  speak('Starting '+cat.value+' quiz');
+};
+
 s.on('update',d=>{
- st.textContent=d.msg;st.className=d.stat;
- sc.textContent=`Score: ${d.score}/${d.total}`;
- it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
- if(d.stat==='ok'){ding.play();speak('Correct!');}
- if(d.stat==='wrong'){buzz.play();speak('Wrong! Try again');}
- if(d.item && d.cat==='Letters'){const words={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};
- speak(d.item+' for '+(words[d.item]||''));}
- if(d.stat==='done'){speak('Congratulations! You completed the quiz!');loadHistory();
-   st.innerHTML='🎉 '+d.msg+' 🎉';
-   setTimeout(()=>{location.reload();},4000);}
+  st.textContent=d.msg;st.className=d.stat;
+  sc.textContent=`Score: ${d.score}/${d.total}`;
+  it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
+  if(d.item){
+    if(d.cat==='Letters'){
+      const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};
+      speak(d.item+' for '+(w[d.item]||''));
+    } else if(d.cat==='Numbers'){
+      speak('Number '+d.item);
+    } else if(d.cat==='Shapes'){
+      speak(d.item+' shape');
+    }
+  }
+  if(d.stat==='ok'){ding.play();speak('Correct');}
+  if(d.stat==='wrong'){buzz.play();speak('Wrong, try again');}
+  if(d.stat==='done'){
+    speak('Congratulations! You completed the quiz');
+    st.innerHTML='🎉 '+d.msg+' 🎉';
+    loadHistory();
+    setTimeout(()=>{location.reload();},4000);
+  }
 });
 loadHistory();
 </script></body></html>"""
@@ -156,5 +183,3 @@ loadHistory();
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5050))
     socketio.run(app,host="0.0.0.0",port=port,debug=True)
-    """_summary_
-    """
