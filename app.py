@@ -47,7 +47,8 @@ state = {
     "current":None,
     "score":0,
     "total":0,
-    "start":None
+    "start":None,
+    "finished":False
 }
 
 def items_for(cat):
@@ -71,7 +72,11 @@ def next_item():
     if state["queue"]:
         state["current"]=state["queue"].pop(0)
     else:
+        # Game is finished
         duration=round(time.time()-state["start"],2)
+        state["current"]=None
+        state["finished"]=True
+        # Save result
         data=load_db()
         data["games"].append({
             "category":state["category"],
@@ -81,13 +86,12 @@ def next_item():
         })
         data["games"]=data["games"][-5:]
         save_db(data)
-        state["current"]=None
         emit_update(f"✅ Quiz Finished in {duration}s!","done")
 
 def start_game(cat,mode):
     q=items_for(cat)
     if mode=="Random": random.shuffle(q)
-    state.update(category=cat,mode=mode,queue=q,score=0,total=len(q),start=time.time())
+    state.update(category=cat,mode=mode,queue=q,score=0,total=len(q),start=time.time(),finished=False)
     next_item()
     emit_update("Game started!","neutral")
 
@@ -102,14 +106,18 @@ def start():
 
 @app.route("/scan",methods=["POST"])
 def scan():
+    if state["finished"]:
+        emit_update("✅ Quiz already finished!","done")
+        return jsonify(ok=True)
     uid=request.get_json(force=True).get("uid","").upper()
     item=resolve(uid)
     if not state["current"]:
         emit_update("✅ Quiz Finished!","done")
     elif item==state["current"]:
         state["score"]+=1
-        next_item()             # ✅ move to next question first
-        emit_update("✅ Correct!","ok")
+        next_item()
+        if not state["finished"]:
+            emit_update("✅ Correct!","ok")
     else:
         emit_update("❌ Wrong! Try again","wrong")
     return jsonify(ok=True)
@@ -150,7 +158,6 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 <h2 id=status class=neutral>Waiting...</h2>
 <div class=stage><div id=item class=big></div><img id=pic src=""></div>
 <h3 id=score>Score: 0/0</h3>
-
 <h2>🕹️ Last 5 Games</h2>
 <table style="margin:auto;border-collapse:collapse">
 <thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th></tr></thead>
