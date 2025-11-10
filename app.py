@@ -5,24 +5,19 @@ import random, time, os, json
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# ------------------- Local Memory & Database -------------------
+# ------------------- Local DB -------------------
 DB_FILE = "games.json"
-games_memory = {"games": []}
-
 def load_db():
     if os.path.exists(DB_FILE):
-        with open(DB_FILE) as f:
+        with open(DB_FILE) as f: 
             return json.load(f)
-    return games_memory
+    return {"games": []}
 
 def save_db(data):
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-    except:
-        games_memory.update(data)
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-# ------------------- RFID Mappings -------------------
+# ------------------- RFID UID Mappings -------------------
 letter_uids = {
     "35278F02":"A","A3624B39":"B","93B09239":"C","436F7733":"D",
     "F3C48333":"E","234F4F39":"F","2F2499DA":"G","F2910C01":"H",
@@ -37,7 +32,6 @@ shape_uids = {
     "35278F02":"Circle","A3624B39":"Rectangle",
     "93B09239":"Triangle","436F7733":"Square"
 }
-
 letter_to_word = {
     "A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg",
     "F":"Frog","G":"Goat","H":"House","I":"Ice Cream",
@@ -65,12 +59,9 @@ def items_for(cat):
 
 def resolve(uid):
     cat = state["category"]
-    if cat == "Letters":
-        return letter_uids.get(uid)
-    elif cat == "Numbers":
-        return number_uids.get(uid)
-    elif cat == "Shapes":
-        return shape_uids.get(uid)
+    if cat == "Letters": return letter_uids.get(uid)
+    if cat == "Numbers": return number_uids.get(uid)
+    if cat == "Shapes": return shape_uids.get(uid)
     return None
 
 def emit_update(msg, stat):
@@ -84,15 +75,13 @@ def emit_update(msg, stat):
     })
 
 def next_item():
-    """Move to next question or finish."""
     if state["queue"]:
         state["current"] = state["queue"].pop(0)
+        emit_update("Next item", "neutral")
     else:
         duration = round(time.time() - state["start"], 2)
         state["current"] = None
         state["finished"] = True
-
-        # Save result
         data = load_db()
         data["games"].append({
             "category": state["category"],
@@ -102,7 +91,6 @@ def next_item():
         })
         data["games"] = data["games"][-5:]
         save_db(data)
-
         emit_update(f"✅ Quiz Finished in {duration}s!", "done")
 
 def start_game(cat, mode):
@@ -112,11 +100,10 @@ def start_game(cat, mode):
     state.update(category=cat, mode=mode, queue=q, score=0,
                  total=len(q), start=time.time(), finished=False)
     next_item()
-    emit_update(f"{cat} Quiz Started!", "neutral")
 
 # ------------------- Routes -------------------
 @app.route("/")
-def home():
+def home(): 
     return render_template_string(HTML_PAGE)
 
 @app.route("/start", methods=["POST"])
@@ -127,15 +114,20 @@ def start():
 
 @app.route("/scan", methods=["POST"])
 def scan():
+    body = request.get_json(force=True)
+    uid = body.get("uid", "").upper()
+    category = body.get("category", state["category"])
+    state["category"] = category
+
     if state["finished"]:
         emit_update("✅ Quiz already finished!", "done")
         return jsonify(ok=True)
 
-    uid = request.get_json(force=True).get("uid", "").upper()
     item = resolve(uid)
+    print(f"🔍 UID={uid} | Category={category} | Resolved={item} | Current={state['current']}")
 
     if not item:
-        emit_update("⚠️ Unknown card scanned!", "wrong")
+        emit_update("⚠️ Unknown card!", "wrong")
         return jsonify(ok=True)
 
     if item == state["current"]:
@@ -148,7 +140,7 @@ def scan():
     return jsonify(ok=True)
 
 @app.route("/api/games")
-def games():
+def games(): 
     return jsonify(load_db()["games"])
 
 @app.route("/static/<path:filename>")
@@ -159,7 +151,7 @@ def static_files(filename):
 def connect():
     emit_update("Connected", "neutral")
 
-# ------------------- HTML -------------------
+# ------------------- HTML Frontend -------------------
 HTML_PAGE = """<!doctype html><html><head>
 <meta charset="utf-8"><title>RFID Quiz</title>
 <style>
@@ -170,11 +162,12 @@ select,button{padding:8px 12px;font-size:16px;margin:5px}
 width:320px;box-shadow:0 6px 20px rgba(0,0,0,0.08)}
 .big{font-size:72px}
 #pic{width:220px;height:220px;object-fit:contain;border-radius:12px;background:#f6f8fb;margin-top:10px}
-.ok-flash{animation:ok 0.6s ease}
-.wrong-flash{animation:wrong 0.6s ease}
+.ok-flash{animation:ok 0.4s ease}
+.wrong-flash{animation:wrong 0.4s ease}
 @keyframes ok{0%{background:#e8ffe8}100%{background:#fff}}
 @keyframes wrong{0%{background:#ffe8e8}100%{background:#fff}}
 .ok{color:green}.wrong{color:red}.neutral{color:#555}.done{color:#0b6e99;font-weight:600}
+audio{display:none}
 </style></head><body>
 <h1>RFID Quiz</h1>
 <div>
@@ -190,31 +183,39 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 <thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th></tr></thead>
 <tbody id=history></tbody></table>
 
+<audio id=ding src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_c3f9b1e982.mp3?filename=correct-answer-6033.mp3"></audio>
+<audio id=buzz src="https://cdn.pixabay.com/download/audio/2021/08/09/audio_0b19ff9931.mp3?filename=error-126627.mp3"></audio>
+
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
 const s=io(),st=document.getElementById('status'),it=document.getElementById('item'),
 sc=document.getElementById('score'),btn=document.getElementById('start'),
 cat=document.getElementById('c'),mod=document.getElementById('m'),pic=document.getElementById('pic'),
-history=document.getElementById('history');
+history=document.getElementById('history'),ding=document.getElementById('ding'),
+buzz=document.getElementById('buzz');
 
 async function loadHistory(){
-const r=await fetch('/api/games');const data=await r.json();
-history.innerHTML=data.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td></tr>`).join('');
+ const r=await fetch('/api/games');const data=await r.json();
+ history.innerHTML=data.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td></tr>`).join('');
 }
 
+function speak(t){if('speechSynthesis'in window){let u=new SpeechSynthesisUtterance(t);u.lang='en-IN';speechSynthesis.cancel();speechSynthesis.speak(u);}}
+
 btn.onclick=async()=>{await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},
-body:JSON.stringify({category:cat.value,mode:mod.value})});};
+ body:JSON.stringify({category:cat.value,mode:mod.value})});};
 
 s.on('update',d=>{
-st.textContent=d.msg;st.className=d.stat;
-sc.textContent=`Score: ${d.score}/${d.total}`;
-it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
-if(d.stat==='ok'||d.stat==='wrong'){setTimeout(()=>{st.textContent='';st.className='neutral';},1200);}
-if(d.stat==='done')loadHistory();
+ st.textContent=d.msg;st.className=d.stat;
+ sc.textContent=`Score: ${d.score}/${d.total}`;
+ it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
+ if(d.item){if(d.cat==='Letters'){const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};speak(d.item+' for '+(w[d.item]||''));}else{speak(d.item);}}
+ if(d.stat==='ok'){ding.play();speak('Correct!');}
+ if(d.stat==='wrong'){buzz.play();speak('Wrong! Try again');}
+ if(d.stat==='done'){speak('Quiz Finished!');loadHistory();}
 });
 loadHistory();
 </script></body></html>"""
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5050))
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5050))
+    socketio.run(app,host="0.0.0.0",port=port,debug=True)
