@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, jsonify, render_template_string
 from flask_socketio import SocketIO
-import random, time, os, json
+import random, time, os, json, datetime
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -8,112 +8,136 @@ DB_FILE = "games.json"
 
 def load_db():
     if os.path.exists(DB_FILE):
-        with open(DB_FILE) as f: return json.load(f)
+        with open(DB_FILE) as f:
+            return json.load(f)
     return {"games": []}
 
 def save_db(data):
-    with open(DB_FILE,"w") as f: json.dump(data,f,indent=2)
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-# ---------------- RFID UID Maps ----------------
-letter_uids={"35278F02":"A","A3624B39":"B","93B09239":"C","436F7733":"D",
-             "F3C48333":"E","234F4F39":"F","2F2499DA":"G","F2910C01":"H",
-             "62A60901":"I","E2B81201":"J","C26F0901":"K"}
-number_uids={"35278F02":"0","A3624B39":"1","93B09239":"2","436F7733":"3",
-             "F3C48333":"4","234F4F39":"5","2F2499DA":"6","F2910C01":"7",
-             "62A60901":"8","E2B81201":"9","C26F0901":"10"}
-shape_uids={"35278F02":"Circle","A3624B39":"Rectangle","93B09239":"Triangle","436F7733":"Square"}
+# ---------------- UID MAPPINGS ----------------
+letter_uids = {
+    "35278F02": "A", "A3624B39": "B", "93B09239": "C", "436F7733": "D",
+    "F3C48333": "E", "234F4F39": "F", "2F2499DA": "G", "F2910C01": "H",
+    "62A60901": "I", "E2B81201": "J", "C26F0901": "K"
+}
+number_uids = {
+    "35278F02": "0", "A3624B39": "1", "93B09239": "2", "436F7733": "3",
+    "F3C48333": "4", "234F4F39": "5", "2F2499DA": "6", "F2910C01": "7",
+    "62A60901": "8", "E2B81201": "9", "C26F0901": "10"
+}
+shape_uids = {
+    "35278F02": "Circle", "A3624B39": "Rectangle",
+    "93B09239": "Triangle", "436F7733": "Square"
+}
 
-letter_to_word={"A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg","F":"Frog",
-                "G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"}
-number_words={"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five",
-              "6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"}
-shape_words={"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
+letter_to_word = {"A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg","F":"Frog","G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"}
+number_words = {"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"}
+shape_words = {"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
 
-state={"category":"Letters","mode":"Sequential","queue":[],"current":None,
-       "score":0,"total":0,"start":None,"finished":False}
+state = {
+    "category": "Letters",
+    "mode": "Sequential",
+    "queue": [],
+    "current": None,
+    "score": 0,
+    "total": 0,
+    "start": None,
+    "finished": False
+}
 
 def items_for(cat):
-    if cat=="Letters": return list(letter_to_word.keys())
-    if cat=="Numbers": return [str(i) for i in range(11)]
-    if cat=="Shapes": return list(shape_uids.values())
+    if cat == "Letters": return list(letter_to_word.keys())
+    if cat == "Numbers": return [str(i) for i in range(11)]
+    if cat == "Shapes": return list(shape_uids.values())
     return []
 
 def resolve(uid):
-    cat=state["category"]
-    if cat=="Letters": return letter_uids.get(uid)
-    if cat=="Numbers": return number_uids.get(uid)
-    if cat=="Shapes": return shape_uids.get(uid)
+    cat = state["category"]
+    if cat == "Letters": return letter_uids.get(uid)
+    if cat == "Numbers": return number_uids.get(uid)
+    if cat == "Shapes": return shape_uids.get(uid)
     return None
 
-def emit_update(msg,stat):
-    socketio.emit("update",{
-        "msg":msg,"stat":stat,"cat":state["category"],
-        "item":state["current"],"score":state["score"],"total":state["total"]
+def emit_update(msg, stat):
+    socketio.emit("update", {
+        "msg": msg,
+        "stat": stat,
+        "cat": state["category"],
+        "item": state["current"],
+        "score": state["score"],
+        "total": state["total"]
     })
 
 def finish_game():
-    duration=round(time.time()-state["start"],2)
-    data=load_db()
-    data["games"].append({"category":state["category"],"score":state["score"],
-                          "total":state["total"],"time":duration})
-    data["games"]=data["games"][-5:]
+    duration = round(time.time() - state["start"], 2)
+    now = datetime.datetime.now().strftime("%d-%b %H:%M")
+    data = load_db()
+    data["games"].insert(0, {
+        "category": state["category"],
+        "score": state["score"],
+        "total": state["total"],
+        "time": duration,
+        "played_at": now
+    })
+    data["games"] = data["games"][:5]
     save_db(data)
-    state["finished"]=True
-    emit_update(f"🎉 Quiz completed in {duration}s!","done")
+    state["finished"] = True
+    emit_update(f"🎉 Quiz completed in {duration} seconds!","done")
 
 def next_item():
     if state["queue"]:
-        state["current"]=state["queue"].pop(0)
+        state["current"] = state["queue"].pop(0)
         emit_update("Next","neutral")
     else:
-        state["current"]=None
         finish_game()
 
-def start_game(cat,mode):
-    q=items_for(cat)
-    if mode=="Random": random.shuffle(q)
-    state.update(category=cat,mode=mode,queue=q,score=0,total=len(q),
-                 start=time.time(),finished=False)
+def start_game(cat, mode):
+    q = items_for(cat)
+    if mode == "Random": random.shuffle(q)
+    state.update(category=cat, mode=mode, queue=q, score=0, total=len(q), start=time.time(), finished=False)
     next_item()
 
 @app.route("/")
-def home(): return render_template_string(HTML_PAGE)
+def home():
+    return render_template_string(HTML_PAGE)
 
-@app.route("/start",methods=["POST"])
+@app.route("/start", methods=["POST"])
 def start():
-    d=request.get_json(force=True)
-    start_game(d.get("category","Letters"),d.get("mode","Sequential"))
+    d = request.get_json(force=True)
+    start_game(d.get("category", "Letters"), d.get("mode", "Sequential"))
     return jsonify(ok=True)
 
-@app.route("/scan",methods=["POST"])
+@app.route("/scan", methods=["POST"])
 def scan():
-    uid=request.get_json(force=True).get("uid","").upper()
+    uid = request.get_json(force=True).get("uid", "").upper()
+    print(f"📥 UID Received: {uid}")
     if state["finished"]:
-        emit_update("✅ Quiz already finished!","done")
+        emit_update("✅ Quiz already finished!", "done")
         return jsonify(ok=True)
-    item=resolve(uid)
+    item = resolve(uid)
     if not item:
-        emit_update("⚠️ Unknown card!","wrong")
+        emit_update("⚠️ Unknown card!", "wrong")
         return jsonify(ok=True)
-    if item==state["current"]:
-        state["score"]+=1
-        emit_update("✅ Correct!","ok")
+    if item == state["current"]:
+        state["score"] += 1
+        emit_update("✅ Correct!", "ok")
         next_item()
     else:
-        emit_update("❌ Wrong! Try again","wrong")
+        emit_update("❌ Wrong! Try again", "wrong")
     return jsonify(ok=True)
 
 @app.route("/api/games")
-def games(): return jsonify(load_db()["games"])
-
-@app.route("/static/<path:filename>")
-def static_files(filename): return send_from_directory("static",filename)
+def games():
+    return jsonify(load_db()["games"])
 
 @socketio.on("connect")
-def connect(): emit_update("Connected","neutral")
+def connect():
+    emit_update("Connected", "neutral")
 
-HTML_PAGE="""<!doctype html><html><head>
-<meta charset='utf-8'><title>RFID Quiz</title>
+HTML_PAGE = """<!doctype html><html><head>
+<meta charset='utf-8'><title>RFID Quiz History</title>
 <style>
 body{font-family:Segoe UI,Arial;background:#eef3f9;text-align:center;margin:0}
 .stage{margin:20px auto;padding:20px;background:#fff;border-radius:16px;width:300px;
@@ -122,11 +146,11 @@ box-shadow:0 6px 20px rgba(0,0,0,0.08)}
 #pic{width:220px;height:220px;object-fit:contain;border-radius:12px;margin-top:10px;background:#f6f8fb}
 .ok{color:green}.wrong{color:red}.done{color:#0b6e99;font-weight:600}
 table{margin:auto;border-collapse:collapse;background:#fff;border-radius:8px}
-th,td{padding:6px 10px;border-bottom:1px solid #ddd}
+th,td{padding:8px 12px;border-bottom:1px solid #ddd}
 th{background:#333;color:#fff}
 audio{display:none}
 </style></head><body>
-<h1>RFID Quiz</h1>
+<h1>RFID Quiz 🧠</h1>
 <div>
 Category:<select id=c><option>Letters</option><option>Numbers</option><option>Shapes</option></select>
 Mode:<select id=m><option>Sequential</option><option>Random</option></select>
@@ -134,8 +158,8 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 <h2 id=status>Waiting...</h2>
 <div class=stage><div id=item class=big></div><img id=pic src=''></div>
 <h3 id=score>Score: 0/0</h3>
-<h2>🕹️ Last 5 Games</h2>
-<table><thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th></tr></thead><tbody id=history></tbody></table>
+<h2>🕹️ Game History (Last 5)</h2>
+<table><thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th><th>Played</th></tr></thead><tbody id=history></tbody></table>
 <audio id=ding src='https://cdn.pixabay.com/download/audio/2021/08/04/audio_c3f9b1e982.mp3?filename=correct-answer-6033.mp3'></audio>
 <audio id=buzz src='https://cdn.pixabay.com/download/audio/2021/08/09/audio_0b19ff9931.mp3?filename=error-126627.mp3'></audio>
 <script src='https://cdn.socket.io/4.5.4/socket.io.min.js'></script>
@@ -147,13 +171,13 @@ history=document.getElementById('history'),ding=document.getElementById('ding'),
 
 async function loadHistory(){
   const r=await fetch('/api/games');const d=await r.json();
-  history.innerHTML=d.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td></tr>`).join('');
+  history.innerHTML=d.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td><td>${g.played_at}</td></tr>`).join('');
 }
 
 function speak(t){
   if('speechSynthesis' in window){
     let u=new SpeechSynthesisUtterance(t);
-    u.lang='en-IN';u.pitch=1;u.rate=1;
+    u.lang='en-IN';u.pitch=1;u.rate=0.9;
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
   }
@@ -169,28 +193,22 @@ s.on('update',d=>{
   sc.textContent=`Score: ${d.score}/${d.total}`;
   it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
   if(d.item){
-    if(d.cat==='Letters'){
-      const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};
-      speak(d.item+' for '+(w[d.item]||''));
-    } else if(d.cat==='Numbers'){
-      const nums={'0':'Zero','1':'One','2':'Two','3':'Three','4':'Four','5':'Five','6':'Six','7':'Seven','8':'Eight','9':'Nine','10':'Ten'};
-      speak(nums[d.item]||d.item);
-    } else if(d.cat==='Shapes'){
-      speak(d.item);
-    }
+    if(d.cat==='Letters'){const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};speak(d.item+' for '+(w[d.item]||''));}
+    else if(d.cat==='Numbers'){const nums={'0':'Zero','1':'One','2':'Two','3':'Three','4':'Four','5':'Five','6':'Six','7':'Seven','8':'Eight','9':'Nine','10':'Ten'};speak(nums[d.item]||d.item);}
+    else if(d.cat==='Shapes'){speak(d.item);}
   }
-  if(d.stat==='ok'){ding.play();speak('Correct');}
-  if(d.stat==='wrong'){buzz.play();speak('Wrong, try again');}
+  if(d.stat==='ok'){ding.play();}
+  if(d.stat==='wrong'){buzz.play();}
   if(d.stat==='done'){
     speak('Congratulations! You completed the quiz');
     st.innerHTML='🎉 '+d.msg+' 🎉';
     loadHistory();
-    setTimeout(()=>{location.reload();},4000);
+    setTimeout(()=>{location.reload();},5000);
   }
 });
 loadHistory();
 </script></body></html>"""
 
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",5050))
-    socketio.run(app,host="0.0.0.0",port=port,debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5050))
+    socketio.run(app, host="0.0.0.0", port=port, debug=True)
