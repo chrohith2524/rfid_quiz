@@ -6,6 +6,7 @@ app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 DB_FILE = "games.json"
 
+# ---------------- JSON Database ----------------
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE) as f:
@@ -16,7 +17,7 @@ def save_db(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-# ---------------- UID MAPPINGS ----------------
+# ---------------- RFID UID Maps ----------------
 letter_uids = {
     "35278F02": "A", "A3624B39": "B", "93B09239": "C", "436F7733": "D",
     "F3C48333": "E", "234F4F39": "F", "2F2499DA": "G", "F2910C01": "H",
@@ -32,27 +33,43 @@ shape_uids = {
     "93B09239": "Triangle", "436F7733": "Square"
 }
 
+# ---------------- Voice Dictionaries ----------------
 letter_to_word = {
     "A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg",
     "F":"Frog","G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"
 }
-number_words = {"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"}
-shape_words = {"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
+number_words = {
+    "0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five",
+    "6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"
+}
+shape_words = {
+    "Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"
+}
 
-# ---------------- GAME STATE ----------------
-state = {"category":"Letters","mode":"Sequential","queue":[],"current":None,"score":0,"total":0,"start":None,"finished":False}
+# ---------------- Game State ----------------
+state = {
+    "category": "Letters",
+    "mode": "Sequential",
+    "queue": [],
+    "current": None,
+    "score": 0,
+    "total": 0,
+    "start": None,
+    "finished": False
+}
 
+# ---------------- Helper Functions ----------------
 def items_for(cat):
-    if cat=="Letters": return list(letter_to_word.keys())
-    if cat=="Numbers": return [str(i) for i in range(11)]
-    if cat=="Shapes": return list(shape_uids.values())
+    if cat == "Letters": return list(letter_to_word.keys())
+    if cat == "Numbers": return [str(i) for i in range(11)]
+    if cat == "Shapes": return list(shape_uids.values())
     return []
 
 def resolve(uid):
     cat = state["category"]
-    if cat=="Letters": return letter_uids.get(uid)
-    if cat=="Numbers": return number_uids.get(uid)
-    if cat=="Shapes": return shape_uids.get(uid)
+    if cat == "Letters": return letter_uids.get(uid)
+    if cat == "Numbers": return number_uids.get(uid)
+    if cat == "Shapes": return shape_uids.get(uid)
     return None
 
 def emit_update(msg, stat):
@@ -79,21 +96,26 @@ def finish_game():
     data["games"] = data["games"][:5]
     save_db(data)
     state["finished"] = True
-    emit_update(f"🎉 Quiz completed in {duration} seconds!","done")
+    socketio.sleep(0.5)
+    emit_update(f"🎉 Quiz completed in {duration} seconds!", "done")
 
 def next_item():
     if state["queue"]:
         state["current"] = state["queue"].pop(0)
-        emit_update("Next","neutral")
+        emit_update("Next", "neutral")
     else:
         finish_game()
+        socketio.sleep(0.3)
+        emit_update("🎯 All questions answered!", "done")
 
 def start_game(cat, mode):
     q = items_for(cat)
     if mode == "Random": random.shuffle(q)
-    state.update(category=cat, mode=mode, queue=q, score=0, total=len(q), start=time.time(), finished=False)
+    state.update(category=cat, mode=mode, queue=q, score=0,
+                 total=len(q), start=time.time(), finished=False)
     next_item()
 
+# ---------------- Flask Routes ----------------
 @app.route("/")
 def home():
     return render_template_string(HTML_PAGE)
@@ -131,6 +153,7 @@ def games():
 def connect():
     emit_update("Connected", "neutral")
 
+# ---------------- HTML Template ----------------
 HTML_PAGE = """<!doctype html><html><head>
 <meta charset='utf-8'><title>RFID Quiz</title>
 <style>
