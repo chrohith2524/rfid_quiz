@@ -43,7 +43,11 @@ number_words = {
 }
 shape_words = {"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
 
-state = {"category":"Letters","mode":"Sequential","queue":[],"current":None,"score":0,"total":0,"start":None,"finished":False}
+# ---------------- State ----------------
+state = {
+    "category":"Letters","mode":"Sequential","queue":[],
+    "current":None,"score":0,"total":0,"start":None,"finished":False
+}
 
 # ---------------- Helpers ----------------
 def items_for(cat):
@@ -59,7 +63,7 @@ def resolve(uid):
     return None
 
 def emit_update(msg, stat):
-    socketio.emit("update",{
+    socketio.emit("update", {
         "msg":msg,"stat":stat,
         "cat":state["category"],
         "item":state["current"],
@@ -81,8 +85,9 @@ def finish_game():
     data["games"]=data["games"][:5]
     save_db(data)
     state["finished"]=True
-    state["current"]=None
     emit_update(f"🎉 Quiz completed in {duration} seconds!","done")
+    socketio.sleep(0.5)
+    state["current"]=None
 
 def next_item():
     if not state["queue"]:
@@ -113,19 +118,26 @@ def scan():
     if state["finished"]:
         emit_update("✅ Quiz already finished!","done")
         return jsonify(ok=True)
+
     item=resolve(uid)
     if not item:
         emit_update("⚠️ Unknown card!","wrong")
         return jsonify(ok=True)
+
+    # --- Correct Card ---
     if item==state["current"]:
         state["score"]+=1
-        if not state["queue"]:          # last question
+        if len(state["queue"])==0:
+            emit_update("✅ Correct!","ok")
+            socketio.sleep(0.3)
             finish_game()
         else:
             emit_update("✅ Correct!","ok")
+            socketio.sleep(0.3)
             next_item()
     else:
         emit_update("❌ Wrong! Try again","wrong")
+
     return jsonify(ok=True)
 
 @app.route("/api/games")
