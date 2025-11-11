@@ -33,17 +33,17 @@ shape_uids = {
     "93B09239": "Triangle", "436F7733": "Square"
 }
 
-# ---------------- Voice Dictionaries ----------------
-letter_to_word = {
-    "A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg",
-    "F":"Frog","G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"
+# ---------------- Word Mappings ----------------
+letter_words = {
+    "A": "Apple", "B": "Ball", "C": "Cat", "D": "Duck", "E": "Egg",
+    "F": "Frog", "G": "Goat", "H": "House", "I": "Ice Cream", "J": "Jug", "K": "Kite"
 }
 number_words = {
-    "0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five",
-    "6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"
+    "0": "Zero", "1": "One", "2": "Two", "3": "Three", "4": "Four",
+    "5": "Five", "6": "Six", "7": "Seven", "8": "Eight", "9": "Nine", "10": "Ten"
 }
 shape_words = {
-    "Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"
+    "Circle": "Circle", "Rectangle": "Rectangle", "Triangle": "Triangle", "Square": "Square"
 }
 
 # ---------------- Game State ----------------
@@ -58,18 +58,17 @@ state = {
     "finished": False
 }
 
-# ---------------- Helper Functions ----------------
+# ---------------- Helpers ----------------
 def items_for(cat):
-    if cat == "Letters": return list(letter_to_word.keys())
-    if cat == "Numbers": return [str(i) for i in range(11)]
-    if cat == "Shapes": return list(shape_uids.values())
+    if cat == "Letters": return list(letter_words.keys())
+    if cat == "Numbers": return list(number_words.keys())
+    if cat == "Shapes": return list(shape_words.keys())
     return []
 
 def resolve(uid):
-    cat = state["category"]
-    if cat == "Letters": return letter_uids.get(uid)
-    if cat == "Numbers": return number_uids.get(uid)
-    if cat == "Shapes": return shape_uids.get(uid)
+    if state["category"] == "Letters": return letter_uids.get(uid)
+    if state["category"] == "Numbers": return number_uids.get(uid)
+    if state["category"] == "Shapes": return shape_uids.get(uid)
     return None
 
 def emit_update(msg, stat):
@@ -96,26 +95,22 @@ def finish_game():
     data["games"] = data["games"][:5]
     save_db(data)
     state["finished"] = True
-    socketio.sleep(0.5)
     emit_update(f"🎉 Quiz completed in {duration} seconds!", "done")
 
 def next_item():
-    if state["queue"]:
+    if not state["queue"]:
+        finish_game()
+    else:
         state["current"] = state["queue"].pop(0)
         emit_update("Next", "neutral")
-    else:
-        finish_game()
-        socketio.sleep(0.3)
-        emit_update("🎯 All questions answered!", "done")
 
 def start_game(cat, mode):
     q = items_for(cat)
     if mode == "Random": random.shuffle(q)
-    state.update(category=cat, mode=mode, queue=q, score=0,
-                 total=len(q), start=time.time(), finished=False)
+    state.update(category=cat, mode=mode, queue=q, score=0, total=len(q), start=time.time(), finished=False)
     next_item()
 
-# ---------------- Flask Routes ----------------
+# ---------------- Routes ----------------
 @app.route("/")
 def home():
     return render_template_string(HTML_PAGE)
@@ -129,20 +124,23 @@ def start():
 @app.route("/scan", methods=["POST"])
 def scan():
     uid = request.get_json(force=True).get("uid", "").upper()
-    print(f"📥 UID Received: {uid}")
+    print("UID:", uid)
     if state["finished"]:
         emit_update("✅ Quiz already finished!", "done")
         return jsonify(ok=True)
+
     item = resolve(uid)
     if not item:
-        emit_update("⚠️ Unknown card!", "wrong")
+        emit_update("⚠️ Unknown Card!", "wrong")
         return jsonify(ok=True)
+
     if item == state["current"]:
         state["score"] += 1
         emit_update("✅ Correct!", "ok")
         next_item()
     else:
-        emit_update("❌ Wrong! Try again", "wrong")
+        emit_update("❌ Wrong Card! Try again", "wrong")
+
     return jsonify(ok=True)
 
 @app.route("/api/games")
@@ -153,13 +151,13 @@ def games():
 def connect():
     emit_update("Connected", "neutral")
 
-# ---------------- HTML Template ----------------
+# ---------------- HTML ----------------
 HTML_PAGE = """<!doctype html><html><head>
 <meta charset='utf-8'><title>RFID Quiz</title>
 <style>
 body{font-family:Segoe UI,Arial;background:#eef3f9;text-align:center;margin:0}
-.stage{margin:20px auto;padding:20px;background:#fff;border-radius:16px;width:300px;
-box-shadow:0 6px 20px rgba(0,0,0,0.08)}
+.stage{margin:20px auto;padding:20px;background:#fff;border-radius:16px;width:320px;
+box-shadow:0 6px 20px rgba(0,0,0,0.1)}
 .big{font-size:72px}
 #pic{width:220px;height:220px;object-fit:contain;border-radius:12px;margin-top:10px;background:#f6f8fb}
 .ok{color:green}.wrong{color:red}.done{color:#0b6e99;font-weight:600}
@@ -178,8 +176,8 @@ Mode:<select id=m><option>Sequential</option><option>Random</option></select>
 <h3 id=score>Score: 0/0</h3>
 <h2>🕹️ Game History (Last 5)</h2>
 <table><thead><tr><th>Category</th><th>Score</th><th>Total</th><th>Time(s)</th><th>Played</th></tr></thead><tbody id=history></tbody></table>
-<audio id=ding src='https://cdn.pixabay.com/download/audio/2021/08/04/audio_c3f9b1e982.mp3?filename=correct-answer-6033.mp3'></audio>
-<audio id=buzz src='https://cdn.pixabay.com/download/audio/2021/08/09/audio_0b19ff9931.mp3?filename=error-126627.mp3'></audio>
+<audio id=ding src='https://cdn.pixabay.com/download/audio/2021/08/04/audio_c3f9b1e982.mp3'></audio>
+<audio id=buzz src='https://cdn.pixabay.com/download/audio/2021/08/09/audio_0b19ff9931.mp3'></audio>
 <script src='https://cdn.socket.io/4.5.4/socket.io.min.js'></script>
 <script>
 const s=io(),st=document.getElementById('status'),it=document.getElementById('item'),
@@ -188,7 +186,8 @@ cat=document.getElementById('c'),mod=document.getElementById('m'),pic=document.g
 history=document.getElementById('history'),ding=document.getElementById('ding'),buzz=document.getElementById('buzz');
 
 async function loadHistory(){
-  const r=await fetch('/api/games');const d=await r.json();
+  const r=await fetch('/api/games');
+  const d=await r.json();
   history.innerHTML=d.map(g=>`<tr><td>${g.category}</td><td>${g.score}</td><td>${g.total}</td><td>${g.time}</td><td>${g.played_at}</td></tr>`).join('');
 }
 
@@ -196,8 +195,7 @@ function speak(t){
   if('speechSynthesis' in window){
     let u=new SpeechSynthesisUtterance(t);
     u.lang='en-IN';u.pitch=1;u.rate=0.9;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
+    speechSynthesis.cancel();speechSynthesis.speak(u);
   }
 }
 
@@ -211,7 +209,7 @@ s.on('update',d=>{
   it.textContent=d.item||'';pic.src=d.item?'/static/images/'+d.item+'.jpg':'';
   if(d.item){
     if(d.cat==='Letters'){const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};speak(d.item+' for '+(w[d.item]||''));}
-    else if(d.cat==='Numbers'){const nums={'0':'Zero','1':'One','2':'Two','3':'Three','4':'Four','5':'Five','6':'Six','7':'Seven','8':'Eight','9':'Nine','10':'Ten'};speak(nums[d.item]||d.item);}
+    else if(d.cat==='Numbers'){const n={'0':'Zero','1':'One','2':'Two','3':'Three','4':'Four','5':'Five','6':'Six','7':'Seven','8':'Eight','9':'Nine','10':'Ten'};speak(n[d.item]||d.item);}
     else if(d.cat==='Shapes'){speak(d.item);}
   }
   if(d.stat==='ok'){ding.play();}
