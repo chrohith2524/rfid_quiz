@@ -14,7 +14,7 @@ def load_db():
 def save_db(data):
     with open(DB_FILE,"w") as f: json.dump(data,f,indent=2)
 
-# ---------------- RFID UID maps ----------------
+# ---------------- RFID UID Maps ----------------
 letter_uids={"35278F02":"A","A3624B39":"B","93B09239":"C","436F7733":"D",
              "F3C48333":"E","234F4F39":"F","2F2499DA":"G","F2910C01":"H",
              "62A60901":"I","E2B81201":"J","C26F0901":"K"}
@@ -22,8 +22,12 @@ number_uids={"35278F02":"0","A3624B39":"1","93B09239":"2","436F7733":"3",
              "F3C48333":"4","234F4F39":"5","2F2499DA":"6","F2910C01":"7",
              "62A60901":"8","E2B81201":"9","C26F0901":"10"}
 shape_uids={"35278F02":"Circle","A3624B39":"Rectangle","93B09239":"Triangle","436F7733":"Square"}
+
 letter_to_word={"A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg","F":"Frog",
                 "G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"}
+number_words={"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five",
+              "6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"}
+shape_words={"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
 
 state={"category":"Letters","mode":"Sequential","queue":[],"current":None,
        "score":0,"total":0,"start":None,"finished":False}
@@ -55,7 +59,6 @@ def finish_game():
     data["games"]=data["games"][-5:]
     save_db(data)
     state["finished"]=True
-    print(f"✅ Finished {state['category']} in {duration}s")
     emit_update(f"🎉 Quiz completed in {duration}s!","done")
 
 def next_item():
@@ -85,12 +88,19 @@ def start():
 @app.route("/scan",methods=["POST"])
 def scan():
     uid=request.get_json(force=True).get("uid","").upper()
-    if state["finished"]: emit_update("✅ Quiz already finished!","done"); return jsonify(ok=True)
+    if state["finished"]:
+        emit_update("✅ Quiz already finished!","done")
+        return jsonify(ok=True)
     item=resolve(uid)
-    if not item: emit_update("⚠️ Unknown card!","wrong"); return jsonify(ok=True)
+    if not item:
+        emit_update("⚠️ Unknown card!","wrong")
+        return jsonify(ok=True)
     if item==state["current"]:
-        state["score"]+=1; emit_update("✅ Correct!","ok"); next_item()
-    else: emit_update("❌ Wrong! Try again","wrong")
+        state["score"]+=1
+        emit_update("✅ Correct!","ok")
+        next_item()
+    else:
+        emit_update("❌ Wrong! Try again","wrong")
     return jsonify(ok=True)
 
 @app.route("/api/games")
@@ -163,9 +173,10 @@ s.on('update',d=>{
       const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};
       speak(d.item+' for '+(w[d.item]||''));
     } else if(d.cat==='Numbers'){
-      speak('Number '+d.item);
+      const nums={'0':'Zero','1':'One','2':'Two','3':'Three','4':'Four','5':'Five','6':'Six','7':'Seven','8':'Eight','9':'Nine','10':'Ten'};
+      speak(nums[d.item]||d.item);
     } else if(d.cat==='Shapes'){
-      speak(d.item+' shape');
+      speak(d.item);
     }
   }
   if(d.stat==='ok'){ding.play();speak('Correct');}
