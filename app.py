@@ -32,32 +32,27 @@ shape_uids = {
     "93B09239": "Triangle", "436F7733": "Square"
 }
 
-letter_to_word = {"A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg","F":"Frog","G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"}
+letter_to_word = {
+    "A":"Apple","B":"Ball","C":"Cat","D":"Duck","E":"Egg",
+    "F":"Frog","G":"Goat","H":"House","I":"Ice Cream","J":"Jug","K":"Kite"
+}
 number_words = {"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"}
 shape_words = {"Circle":"Circle","Rectangle":"Rectangle","Triangle":"Triangle","Square":"Square"}
 
-state = {
-    "category": "Letters",
-    "mode": "Sequential",
-    "queue": [],
-    "current": None,
-    "score": 0,
-    "total": 0,
-    "start": None,
-    "finished": False
-}
+# ---------------- GAME STATE ----------------
+state = {"category":"Letters","mode":"Sequential","queue":[],"current":None,"score":0,"total":0,"start":None,"finished":False}
 
 def items_for(cat):
-    if cat == "Letters": return list(letter_to_word.keys())
-    if cat == "Numbers": return [str(i) for i in range(11)]
-    if cat == "Shapes": return list(shape_uids.values())
+    if cat=="Letters": return list(letter_to_word.keys())
+    if cat=="Numbers": return [str(i) for i in range(11)]
+    if cat=="Shapes": return list(shape_uids.values())
     return []
 
 def resolve(uid):
     cat = state["category"]
-    if cat == "Letters": return letter_uids.get(uid)
-    if cat == "Numbers": return number_uids.get(uid)
-    if cat == "Shapes": return shape_uids.get(uid)
+    if cat=="Letters": return letter_uids.get(uid)
+    if cat=="Numbers": return number_uids.get(uid)
+    if cat=="Shapes": return shape_uids.get(uid)
     return None
 
 def emit_update(msg, stat):
@@ -137,7 +132,7 @@ def connect():
     emit_update("Connected", "neutral")
 
 HTML_PAGE = """<!doctype html><html><head>
-<meta charset='utf-8'><title>RFID Quiz History</title>
+<meta charset='utf-8'><title>RFID Quiz</title>
 <style>
 body{font-family:Segoe UI,Arial;background:#eef3f9;text-align:center;margin:0}
 .stage{margin:20px auto;padding:20px;background:#fff;border-radius:16px;width:300px;
@@ -185,7 +180,6 @@ function speak(t){
 
 btn.onclick=async()=>{
   await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat.value,mode:mod.value})});
-  speak('Starting '+cat.value+' quiz');
 };
 
 s.on('update',d=>{
@@ -200,8 +194,8 @@ s.on('update',d=>{
   if(d.stat==='ok'){ding.play();}
   if(d.stat==='wrong'){buzz.play();}
   if(d.stat==='done'){
-    speak('Congratulations! You completed the quiz');
     st.innerHTML='🎉 '+d.msg+' 🎉';
+    speak('Congratulations! You completed the quiz');
     loadHistory();
     setTimeout(()=>{location.reload();},5000);
   }
