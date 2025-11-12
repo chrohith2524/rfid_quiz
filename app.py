@@ -166,7 +166,7 @@ h1{margin:20px 0}
 select,button{padding:8px 12px;font-size:16px;margin:5px}
 .stage{margin:20px auto;padding:20px;background:#fff;border-radius:16px;width:340px;box-shadow:0 6px 20px rgba(0,0,0,0.08)}
 .big{font-size:72px}
-#pic{width:220px;height:220px;object-fit:contain;border-radius:12px;background:#f6f8fb;margin-top:10px}
+#pic{width:220px;height:220px;object-fit:contain;border-radius:12px;background:#f6f8fb;margin-top:10px;transition:opacity .3s ease;opacity:0}
 table{margin:auto;width:85%;border-collapse:collapse;margin-top:20px;max-width:750px}
 th,td{padding:8px;border-bottom:1px solid #ccc;text-align:center}
 thead{background:#0b6e99;color:white}
@@ -208,51 +208,37 @@ thead{background:#0b6e99;color:white}
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
+// ✅ Preload images to remove lag
+const preloadImages = () => {
+  const imgs = ['A','B','C','D','E','F','G','H','I','J','K',
+    '0','1','2','3','4','5','6','7','8','9','10',
+    'Circle','Rectangle','Triangle','Square'];
+  imgs.forEach(i => {const img=new Image();img.src='/static/images/'+i+'.jpg';});
+};
+window.onload = preloadImages;
+
 const s=io(),st=document.getElementById('status'),it=document.getElementById('item'),
 sc=document.getElementById('score'),btn=document.getElementById('start'),
 cat=document.getElementById('c'),mod=document.getElementById('m'),
 pic=document.getElementById('pic'),hist=document.getElementById('hist');
 
-function speak(t){
-  if('speechSynthesis'in window){
-    let u=new SpeechSynthesisUtterance(t);
-    u.lang='en-IN'; speechSynthesis.cancel(); speechSynthesis.speak(u);
-  }
-}
+function speak(t){if('speechSynthesis'in window){let u=new SpeechSynthesisUtterance(t);u.lang='en-IN';speechSynthesis.cancel();speechSynthesis.speak(u);}}
 function phrase(cat,i){
-  if(cat==='Letters'){
-    const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};
-    return i+' for '+(w[i]||'');
-  }
-  if(cat==='Numbers'){
-    const n={"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"};
-    return n[i]||i;
-  }
+  if(cat==='Letters'){const w={A:'Apple',B:'Ball',C:'Cat',D:'Duck',E:'Egg',F:'Frog',G:'Goat',H:'House',I:'Ice Cream',J:'Jug',K:'Kite'};return i+' for '+(w[i]||'');}
+  if(cat==='Numbers'){const n={"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Nine","10":"Ten"};return n[i]||i;}
   return i;
 }
 
-function renderHistory(list){
-  hist.innerHTML=list.map((x,i)=>`
-    <tr class='${i===0?"highlight":""}'>
-      <td>${x.category}</td>
-      <td>${x.score}/${x.total}</td>
-      <td>${x.time}</td>
-      <td>📅 ${x.date||"-"}</td>
-    </tr>`).join('');
-}
+function renderHistory(list){hist.innerHTML=list.map((x,i)=>`<tr class='${i===0?"highlight":""}'><td>${x.category}</td><td>${x.score}/${x.total}</td><td>${x.time}</td><td>📅 ${x.date||"-"}</td></tr>`).join('');}
 
-btn.onclick=async()=>{
-  await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({category:cat.value,mode:mod.value})});
-};
+btn.onclick=async()=>{await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat.value,mode:mod.value})});};
 
 s.on('update',d=>{
-  st.textContent=d.msg; st.className=d.stat;
+  st.textContent=d.msg;st.className=d.stat;
   sc.textContent=`Score: ${d.score}/${d.total}`;
   it.textContent=d.item||'';
-  pic.src=d.item?('/static/images/'+d.item+'.jpg'):'';
+  if(d.item){pic.style.opacity=0;setTimeout(()=>{pic.src='/static/images/'+d.item+'.jpg';pic.style.opacity=1;speak(phrase(d.cat,d.item));},200);}
   renderHistory(d.history||[]);
-  if(d.item){ speak(phrase(d.cat,d.item)); }
 });
 </script></body></html>"""
 
