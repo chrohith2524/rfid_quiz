@@ -1,0 +1,96 @@
+/*
+  =============================================
+  RFID + ESP8266 → Flask Web App (Render Hosted)
+  =============================================
+  Reads RFID card UID using MFRC522 and sends it
+  securely to your Render-hosted Flask app.
+*/
+
+#include <SPI.h>
+#include <MFRC522.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+// ---------- RFID CONNECTIONS ----------
+#define SS_PIN  D1   // SDA
+#define RST_PIN D2   // RST
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+// ---------- WIFI SETTINGS ----------
+const char* WIFI_SSID = "Rohith";       // your WiFi name
+const char* WIFI_PASS = "Aldebaran";    // your WiFi password
+
+// ---------- SERVER URL ----------
+const char* SERVER_URL = "https://rfid-quiz.onrender.com/";  // Your Render Flask app endpoint
+
+void setup() {
+  Serial.begin(115200);
+  SPI.begin();
+  rfid.PCD_Init();
+  Serial.println("Connecting to WiFi...");
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\n✅ WiFi Connected!");
+  Serial.print("ESP IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("Place your RFID card near the reader...");
+}
+
+void loop() {
+  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
+    delay(200);
+    return;
+  }
+
+  // Convert UID to HEX
+  String uidStr = "";
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    if (rfid.uid.uidByte[i] < 0x10) uidStr += "0";
+    uidStr += String(rfid.uid.uidByte[i], HEX);
+  }
+  uidStr.toUpperCase();
+
+  Serial.print("Scanned UID: ");
+  Serial.println(uidStr);
+
+  sendUID(uidStr);  // Send UID to Flask server
+
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+  delay(1000);
+}
+
+void sendUID(String uid) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("❌ WiFi not connected!");
+    return;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();  // Disable SSL check (safe for testing)
+
+  HTTPClient http;
+  http.begin(client, SERVER_URL);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{\"uid\":\"" + uid + "\"}";
+  Serial.println("Sending UID -> " + payload);
+
+  int httpCode = http.POST(payload);
+  Serial.printf("Response code: %d\n", httpCode);
+
+  if (httpCode > 0) {
+    String response = http.getString();
+    Serial.println("Server response: " + response);
+  } else {
+    Serial.println("❌ POST failed!");
+  }
+
+  http.end();
+}
