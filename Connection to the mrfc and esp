@@ -1,0 +1,10 @@
+| **RC522 Pin** | **NodeMCU Pin** | **Function**     |
+| ------------- | --------------- | ---------------- |
+| **3.3V**      | 3V3             | Power supply     |
+| **GND**       | GND             | Ground           |
+| **SDA**       | **D2 (GPIO4)**  | SS / Chip Select |
+| **SCK**       | **D5 (GPIO14)** | SPI Clock        |
+| **MOSI**      | **D7 (GPIO13)** | SPI MOSI         |
+| **MISO**      | **D6 (GPIO12)** | SPI MISO         |
+| **RST**       | **D1 (GPIO5)**  | Reset pin        |
+
